@@ -1,73 +1,51 @@
 package ru.sandbox.sarafan.controller;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import com.fasterxml.jackson.annotation.JsonView;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
-import ru.sandbox.sarafan.exception.MessageNotFoundException;
+import ru.sandbox.sarafan.domain.Message;
+import ru.sandbox.sarafan.domain.view.Views;
+import ru.sandbox.sarafan.repository.MessageRepo;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static org.springframework.http.ResponseEntity.*;
 
 @RestController
 @RequestMapping("message")
+@RequiredArgsConstructor
 public class MessageController {
 
-    private final List<Map<String, String>> messages = new ArrayList<>() {{
-        add(new HashMap<>() {{
-            put("id", "1");
-            put("text", "First message");
-        }});
-        add(new HashMap<>() {{
-            put("id", "2");
-            put("text", "Second message");
-        }});
-        add(new HashMap<>() {{
-            put("id", "3");
-            put("text", "Third message");
-        }});
-    }};
-    private AtomicLong counter = new AtomicLong(3L);
-
+    private final MessageRepo messageRepo;
 
     @GetMapping
-    public List<Map<String, String>> getAll() {
-        return messages;
+    @JsonView(Views.IdText.class)
+    public List<Message> getAll() {
+        return messageRepo.findAll();
     }
 
     @GetMapping("{id}")
-    public Map<String, String> getOne(@PathVariable String id) {
-        return findMessage(id);
-    }
-
-    @PostMapping
-    public Map<String, String> create(@RequestBody Map<String, String> message) {
-        message.put("id", String.valueOf(counter.incrementAndGet()));
-        messages.add(message);
+    @JsonView(Views.FullMessage.class)
+    public Message getOne(@PathVariable("id")
+                                  Message message) { // Магия! Spring находит по id из указанного пути нужный Message сам, т.е. неявно вызывается messageRepo.findById(id)
         return message;
     }
 
+    @PostMapping
+    public Message create(@RequestBody Message message) {
+        message.setCreatedAt(LocalDateTime.now());
+        return messageRepo.save(message);
+    }
+
     @PutMapping("{id}")
-    public Map<String, String> update(@PathVariable String id, @RequestBody Map<String, String> message) {
-        Map<String, String> messageFromDb = findMessage(id);
-        message.put("id", id);
-        messageFromDb.putAll(message);
-        return messageFromDb;
+    public Message update(@PathVariable("id") Message messageFromDb,
+                          @RequestBody Message message) {
+        BeanUtils.copyProperties(message, messageFromDb, "id");
+        return messageRepo.save(messageFromDb);
     }
 
     @DeleteMapping("{id}")
-    public void delete(@PathVariable String id) {
-         messages.remove(findMessage(id));
-    }
-
-    private Map<String, String> findMessage(String id) {
-        return messages.stream()
-                       .filter(m -> m.get("id").equals(id))
-                       .findFirst()
-                       .orElseThrow(MessageNotFoundException::new);
+    public void delete(@PathVariable("id") Message message) {
+        messageRepo.delete(message);
     }
 }
